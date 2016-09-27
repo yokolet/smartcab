@@ -6,8 +6,6 @@ from simulator import Simulator
 class LearningAgent(Agent):
     """An agent that learns to drive in the smartcab world."""
 
-    actions = [None, 'forward', 'left', 'right']
-
     def __init__(self, env):
         super(LearningAgent, self).__init__(env)  # sets self.env = env, state = None, next_waypoint = None, and a default color
         self.color = 'red'  # override color
@@ -20,15 +18,28 @@ class LearningAgent(Agent):
 
     def next_random_action(self):
         import random
-        return random.choice(self.actions)
+        return random.choice(self.env.valid_actions)
+
+    def current_state(self, inputs):
+        from scipy.spatial.distance import cityblock
+        env_state = self.env.agent_states[self]
+        return {'dist': [cityblock(env_state['destination'], env_state['location']),
+                         env_state['location'],
+                         env_state['destination']],
+                'waypt': self.next_waypoint,
+                'light': inputs['light'],
+                'oncoming': inputs['oncoming'],
+                'left': inputs['left']}
 
     def update(self, t):
         # Gather inputs
-        self.next_waypoint = self.planner.next_waypoint()  # from route planner, also displayed by simulator
+        self.next_waypoint = self.planner.next_waypoint()  # from
+        # route planner, also displayed by simulator
         inputs = self.env.sense(self)
         deadline = self.env.get_deadline(self)
 
         # TODO: Update state
+        self.state = self.current_state(inputs)
         
         # TODO: Select action according to your policy
         action = self.next_random_action()
