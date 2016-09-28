@@ -11,25 +11,35 @@ class LearningAgent(Agent):
         self.color = 'red'  # override color
         self.planner = RoutePlanner(self.env, self)  # simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
+        self.q_table = {}
 
     def reset(self, destination=None):
         self.planner.route_to(destination)
         # TODO: Prepare for a new trip; reset any variables here, if required
 
-    def next_random_action(self):
-        import random
-        return random.choice(self.env.valid_actions)
+    def learn(self, alpha, gamma, reward, action):
+        # gets next state
+        next_inputs = self.env.sense(self)
+        next_waypoint = self.planner.next_waypoint()
+        next_state = (next_inputs['light'], next_inputs['oncoming'],
+                      next_inputs['left'], next_waypoint)
+        # finds max among next state
+        q_max = max([self.q_table.get((next_state, a), 0.0) for a in self.env.valid_actions])
+        # caclulates Q(s,a) <- Q(s,a) + alpha * (reward + gamma * max Q(s',a') - Q(s,a))
+        q_sa = self.q_table.get((self.state, action), 0.0)
+        self.q_table[(self.state, action)] = q_sa + alpha * (reward + gamma * q_max - q_sa)
 
-    def current_state(self, inputs):
-        from scipy.spatial.distance import cityblock
-        env_state = self.env.agent_states[self]
-        return {'dist': [cityblock(env_state['destination'], env_state['location']),
-                         env_state['location'],
-                         env_state['destination']],
-                'waypt': self.next_waypoint,
-                'light': inputs['light'],
-                'oncoming': inputs['oncoming'],
-                'left': inputs['left']}
+    def next_action(self, actions):
+        # gets values in q_table
+        q_values = [(i, self.q_table.get((self.state, a), 0.0)) for i, a in enumerate(actions)]
+        # finds max value
+        q_values = sorted(q_values, key=lambda x: x[1], reverse=True)
+        q_max = q_values[0][1]
+        # finds actions who have max values
+        q_maxes = filter(lambda x: x[1]==q_max, q_values)
+        # choose action index randomly from actions of max value
+        action_index = random.choice(map(lambda x: x[0], q_maxes))
+        return actions[action_index]
 
     def update(self, t):
         # Gather inputs
@@ -37,17 +47,22 @@ class LearningAgent(Agent):
         # route planner, also displayed by simulator
         inputs = self.env.sense(self)
         deadline = self.env.get_deadline(self)
+        env_state = self.env.agent_states[self]
 
         # TODO: Update state
-        self.state = self.current_state(inputs)
+        self.state = (inputs['light'], inputs['oncoming'], inputs['left'], self.next_waypoint)
         
         # TODO: Select action according to your policy
-        action = self.next_random_action()
+        #action = random.choice(self.env.valid_actions)
+        action = self.next_action(self.env.valid_actions)
 
         # Execute action and get reward
         reward = self.env.act(self, action)
 
         # TODO: Learn policy based on state, action, reward
+        alpha = 0.5
+        gamma = 0.8
+        self.learn(alpha, gamma, reward, action)
 
         #print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
 
@@ -58,7 +73,7 @@ def run():
     # Set up environment and agent
     e = Environment()  # create environment (also adds some dummy traffic)
     a = e.create_agent(LearningAgent)  # create agent
-    e.set_primary_agent(a, enforce_deadline=False)  # specify agent to track
+    e.set_primary_agent(a, enforce_deadline=True)  # specify agent to track
     # NOTE: You can set enforce_deadline=False while debugging to allow longer trials
 
     # Now simulate it
