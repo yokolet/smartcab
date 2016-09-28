@@ -12,6 +12,10 @@ class LearningAgent(Agent):
         self.planner = RoutePlanner(self.env, self)  # simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
         self.q_table = {}
+        # for epsilon calculation
+        self.prev_reward = -10
+        self.epsilon_policies = [lambda x: 0.1 if x['deadline'] % 5 == 0 else 0.9,
+                                 lambda x: 0.1 if x['reward'] < -0.7 else 0.9]
 
     def reset(self, destination=None):
         self.planner.route_to(destination)
@@ -29,7 +33,7 @@ class LearningAgent(Agent):
         q_sa = self.q_table.get((self.state, action), 0.0)
         self.q_table[(self.state, action)] = q_sa + alpha * (reward + gamma * q_max - q_sa)
 
-    def next_action(self, actions):
+    def best_action(self, actions):
         # gets values in q_table
         q_values = [(i, self.q_table.get((self.state, a), 0.0)) for i, a in enumerate(actions)]
         # finds max value
@@ -53,8 +57,12 @@ class LearningAgent(Agent):
         self.state = (inputs['light'], inputs['oncoming'], inputs['left'], self.next_waypoint)
         
         # TODO: Select action according to your policy
-        #action = random.choice(self.env.valid_actions)
-        action = self.next_action(self.env.valid_actions)
+        policy_no = 1
+        epsilon = self.epsilon_policies[policy_no]({'deadline': deadline, 'reward': self.prev_reward})
+        if epsilon < 0.5:
+            action = random.choice(self.env.valid_actions)
+        else:
+            action = self.best_action(self.env.valid_actions)
 
         # Execute action and get reward
         reward = self.env.act(self, action)
@@ -64,8 +72,10 @@ class LearningAgent(Agent):
         gamma = 0.8
         self.learn(alpha, gamma, reward, action)
 
-        #print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
+        # saves reward for epsilon value
+        self.prev_reward = reward
 
+        #print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
 
 def run():
     """Run the agent for a finite number of trials."""
