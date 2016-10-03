@@ -14,8 +14,9 @@ class LearningAgent(Agent):
         self.q_table = {}
         # for epsilon calculation
         self.prev_reward = -10
+        random_index = [0, 5, 25, 125, 625, 3125]
         self.epsilon_policies = [lambda x: 0.9,
-                                 lambda x: 0.1 if x['deadline'] % 5 == 0 else 0.9,
+                                 lambda x: 0.1 if x['count'] in random_index else 0.9,
                                  lambda x: 0.1 if x['reward'] < -0.7 else 0.9]
 
     def reset(self, destination=None):
@@ -60,7 +61,7 @@ class LearningAgent(Agent):
         
         # TODO: Select action according to your policy
         policy_no = self.perf_params['policy_no']
-        epsilon = self.epsilon_policies[policy_no]({'deadline': deadline, 'reward': self.prev_reward})
+        epsilon = self.epsilon_policies[policy_no]({'count': self.iter_count, 'reward': self.prev_reward})
         if epsilon < 0.5:
             action = random.choice(self.env.valid_actions)
         else:
@@ -79,6 +80,7 @@ class LearningAgent(Agent):
         self.prev_reward = reward
         if reward < 0:
             self.statistics['penalty'] += reward
+        self.iter_count += 1
 
         #print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
 
@@ -88,6 +90,7 @@ class LearningAgent(Agent):
         # initialize parameters to use new epsilon policy, alpha, gamma
         self.q_table = {}
         self.prev_reward = -10
+        self.iter_count = 0
 
     def log(self, deadline, env_state):
         if self.initial_deadline == None:
@@ -111,21 +114,25 @@ def run():
     sim = Simulator(e, update_delay=0.1, display=False)  # create simulator (uses pygame when display=True, if available)
     # NOTE: To speed up simulation, reduce update_delay and/or set display=False
 
-    policies = [0, 1, 2]
-    alphas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    gammas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    trials = 100
+    # policies = [0, 1, 2]
+    # alphas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    # gammas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    # trials = 100
     # policies = [0, 1, 2]
     # alphas = [0.5]
-    # gammas = [0.8]
-    # trials = 3
+    # gammas = [0.1]
+    # trials = 100
+    policies = [0, 0, 0, 0, 1, 1, 1, 1,  2, 2, 2, 2]
+    alphas = [0.5, 0.1, 0.01]
+    gammas = [0.5, 0.1, 0.01]
+    trials = 100
     import logging
     from datetime import datetime
     logging.basicConfig(filename='perf_params.log', level=logging.INFO)
     logging.info('Started')
-    for policy in policies:
-        for alpha in alphas:
-            for gamma in gammas:
+    for alpha in alphas:
+        for gamma in gammas:
+            for policy in policies:
                 perf_params = {'policy_no': policy, 'alpha': alpha, 'gamma': gamma}
                 e.primary_agent.set_perf_params(perf_params)
                 print e.primary_agent.perf_params
@@ -135,10 +142,17 @@ def run():
                 tmp['ratio'] = float(tmp['extra']) / float(tmp['success'])
                 print tmp
                 logging.info(dict(tmp.items() + perf_params.items()))
+                log_q_table(logging, e.primary_agent.q_table)
                 logging.info('end   - ' + str(datetime.now()))
     logging.info('Finished')
     # NOTE: To quit midway, press Esc or close pygame window, or hit
     # Ctrl+C on the command-line
+
+def log_q_table(logging, qt):
+    i = 0
+    for k in sorted(qt, key=qt.get, reverse=True):
+        logging.info("{}, {}: {}".format(i, k, qt[k]))
+        i += 1
 
 
 if __name__ == '__main__':
